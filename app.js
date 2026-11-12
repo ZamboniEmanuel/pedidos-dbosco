@@ -2,7 +2,7 @@
 (function(){
 'use strict';
 var API='https://script.google.com/macros/s/AKfycbwXihSxdsQyjWX4aZ0ahFw9KHseiktYK9yHfJVUags-bjCFaTw1FrmeTPW4kmerBayt-A/exec';
-var VERSAO='2026-11-12a';
+var VERSAO='2026-11-12b';
 var K={cred:'db.cred',dados:'db.dados',fila:'db.fila',novos:'db.clientesNovos'};
 var $=function(s){return document.querySelector(s)};
 function ler(k,d){try{var v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}}
@@ -115,14 +115,11 @@ function telaNovo(a){
     if(d.length!==14){m.innerHTML='<div class="erro">Digite os 14 números do CNPJ.</div>';return}
     if(!navigator.onLine){m.innerHTML='<div class="aviso">Sem sinal: preencha os campos à mão.</div>';return}
     m.innerHTML='<p class="note"><span class="spin"></span> Buscando na Receita…</p>';
-    fetch('https://brasilapi.com.br/api/cnpj/v1/'+d).then(function(r){if(!r.ok)throw new Error(r.status===404?'CNPJ não encontrado na Receita.':'Não deu para buscar agora.');return r.json()}).then(function(j){
+    apiGet({acao:'cnpj',rep:S.cred.rep,k:S.cred.k,cnpj:d}).then(function(j){if(!j.ok)throw new Error(j.erro||'Não deu para buscar agora.');
       var set=function(id,x){if(x&&String(x).trim())$('#'+id).value=String(x).trim()};
-      set('n1',j.razao_social);set('n6',j.nome_fantasia);
-      set('n7',[[j.descricao_tipo_de_logradouro,j.logradouro].filter(function(x){return x&&String(x).trim()}).join(' '),j.numero,j.complemento].filter(function(x){return x&&String(x).trim()}).join(', '));
-      set('n8',j.bairro);set('n9',String(j.cep||'').replace(/\D/g,'').replace(/^(\d{5})(\d{3})$/,'$1-$2'));set('n2',j.municipio);set('n5',j.uf);
-      if(j.ddd_telefone_1)set('n4',String(j.ddd_telefone_1).replace(/\D/g,'').replace(/^(\d{2})(\d{4,5})(\d{4})$/,'($1) $2-$3'));
+      set('n1',j.razao);set('n6',j.fantasia);set('n7',j.endereco);set('n8',j.bairro);set('n9',j.cep);set('n2',j.cidade);set('n5',j.uf);set('n4',j.telefone);
       m.innerHTML='<div class="aviso" style="background:var(--ok-bg);color:var(--ok)">Dados da Receita preenchidos. Confira e complete a inscrição estadual.</div>';ok()
-    }).catch(function(e){m.innerHTML='<div class="erro">'+esc(e.message)+' Preencha à mão.</div>'})};
+    }).catch(function(e){m.innerHTML='<div class="erro">'+esc(e instanceof TypeError?'Não deu para buscar agora.':e.message)+' Preencha à mão.</div>'})};
   $('#segN').addEventListener('click',function(e){var b=e.target.closest('[data-nv]');if(!b)return;nv=b.dataset.nv;document.querySelectorAll('#segN button').forEach(function(x){x.classList.toggle('on',x.dataset.nv===nv)})});
   $('#salvaN').onclick=function(){var cnpj=v('n3').replace(/\D/g,'').replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/,'$1.$2.$3/$4-$5');
     var ja=clientes().filter(function(x){return x.cnpj===cnpj})[0];

@@ -2,7 +2,7 @@
 (function(){
 'use strict';
 var API='https://script.google.com/macros/s/AKfycbwXihSxdsQyjWX4aZ0ahFw9KHseiktYK9yHfJVUags-bjCFaTw1FrmeTPW4kmerBayt-A/exec';
-var VERSAO='2026-11-12b';
+var VERSAO='2026-11-12c';
 var K={cred:'db.cred',dados:'db.dados',fila:'db.fila',novos:'db.clientesNovos'};
 var $=function(s){return document.querySelector(s)};
 function ler(k,d){try{var v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}}
@@ -60,7 +60,12 @@ function pendentes(){return S.fila.filter(function(f){return f.status==='pendent
 /* ---------- telas ---------- */
 function ir(t,msg){S.tela=t;S.msg=msg||'';tela();window.scrollTo(0,0)}
 var PASSOS={clientes:1,novo:1,industria:2,catalogo:3,conferir:4,enviado:4};
-function strip(){var el=$('#strip');if(!el)return;var p=pendentes();
+function pendBox(){var el=$('#pend');if(!el)return;var p=pendentes(),e=S.fila.filter(function(f){return f.status==='erro'}).length,h='';
+  if(p)h+='<button class="pend" data-go="pedidos"><b>⏳ '+p+(p>1?' pedidos aguardando envio':' pedido aguardando envio')+'</b>'+
+    '<span>'+(S.sincronizando?'Enviando agora… deixe o app aberto.':online()?'Com sinal: deixe o app aberto uns segundos que ele envia.':'Está guardado no celular. Quando tiver sinal, abra o app e deixe aberto uns segundos.')+'</span></button>';
+  if(e)h+='<button class="pend err" data-go="pedidos"><b>! '+e+(e>1?' pedidos não foram enviados':' pedido não foi enviado')+'</b><span>Toque aqui para ver e tentar de novo.</span></button>';
+  el.innerHTML=h}
+function strip(){pendBox();var el=$('#strip');if(!el)return;var p=pendentes();
   el.innerHTML='<span>'+esc(S.dados&&S.dados.rep?S.dados.rep.nome:'')+'</span><span style="display:flex;gap:8px;align-items:center">'+
    (p?'<button class="linkbtn" data-go="pedidos">'+p+' aguardando envio</button>':'<button class="linkbtn" data-go="pedidos">Meus pedidos</button>')+
    (S.sincronizando?'<span class="spin"></span>':'<span class="pill '+(online()?'':'off')+'">'+(online()?'Com sinal':'Sem sinal')+'</span>')+'</span>'}
@@ -84,7 +89,7 @@ function entrar(a){
     carregaDados(false).then(function(ok){if(ok){grava(K.cred,S.cred);ir('clientes')}else{S.cred=null;if(!S.msg)S.msg='Não consegui entrar. Confira a chave e o sinal.';tela()}})}}
 
 function telaClientes(a){
-  a.innerHTML=topo('Qual cliente?',null)+(S.msg?'<div class="aviso">'+esc(S.msg)+'</div>':'')+
+  a.innerHTML=topo('Qual cliente?',null)+'<div id="pend"></div>'+(S.msg?'<div class="aviso">'+esc(S.msg)+'</div>':'')+
    '<input class="search" id="busca" placeholder="Buscar por nome ou cidade" value="'+esc(S.busca)+'" autocomplete="off">'+
    '<button class="card add" data-go="novo" style="margin-top:14px">+ Cadastrar cliente novo</button><div id="lista"></div>';
   var lista=function(){var q=norm(S.busca);var cs=clientes().filter(function(c){return norm(c.nome+' '+c.fantasia+' '+c.cidade).indexOf(q)>=0});
@@ -165,7 +170,7 @@ function telaConferir(a){var t=totais(),c=S.cli,ind=industria(S.ind),nv=temNivei
    '<div class="okbox"><span>Sua comissão neste pedido ('+String(Math.round(ind.comissaoRep*1000)/10).replace('.',',')+'%)</span><b>'+brl(t.com)+'</b></div>'+
    '<label class="field" for="obs">Observação para o pedido (se quiser)<textarea id="obs" rows="2">'+esc(S.obs)+'</textarea></label>'+
    '<div style="margin-top:20px"><button class="btn" id="env">Enviar pedido</button></div><div style="margin-top:10px"><button class="btn alt" data-go="catalogo">Mudar quantidades</button></div>'+
-   '<p class="note">'+(online()?'O pedido vai para conferência no administrativo e segue para a indústria.':'Sem sinal agora: o pedido fica guardado e sai sozinho quando a internet voltar.')+'</p>';
+   '<p class="note">'+(online()?'O pedido vai para conferência no administrativo e segue para a indústria.':'Sem sinal agora: o pedido fica guardado no celular. Ele sai quando o app estiver aberto com sinal.')+'</p>';
   $('#obs').addEventListener('input',function(e){S.obs=e.target.value});
   $('#env').onclick=function(){var d=document.createElement('div');d.className='sheet';
     d.innerHTML='<div class="box"><h3>Enviar este pedido?</h3><p>'+esc(c.nome)+' · '+esc(S.ind)+' · '+brl(t.t)+'</p><button class="btn" id="sim">Sim, enviar</button><button class="btn alt" id="nao">Voltar e conferir</button></div>';
@@ -186,7 +191,7 @@ function telaEnviado(a){var f=S.fila.filter(function(x){return x.pedido.id===S.u
   var h='';
   if(st==='enviado')h='<div class="chk">✓</div><h2 style="margin:0">Pedido enviado</h2>'+(f.aviso?'<div class="aviso">'+esc(f.aviso)+'</div>':'');
   else if(st==='erro')h='<div class="chk wait" style="background:var(--err-bg);color:var(--err)">!</div><h2 style="margin:0">Não deu para enviar</h2><div class="erro">'+esc(f.erro)+'</div><p class="note">Abra “Meus pedidos” para corrigir ou tentar de novo.</p>';
-  else h='<div class="chk wait">'+(S.sincronizando?'<span class="spin"></span>':'⏳')+'</div><h2 style="margin:0">'+(online()?'Enviando…':'Guardado, sai quando a internet voltar')+'</h2>';
+  else h='<div class="chk wait">'+(S.sincronizando?'<span class="spin"></span>':'⏳')+'</div><h2 style="margin:0">'+(online()?'Enviando…':'Guardado no celular')+'</h2>'+(online()?'':'<p class="note">Pode fechar. Quando tiver sinal, abra o app e deixe aberto uns segundos que ele envia.</p>');
   a.innerHTML=topo('Pedido '+esc(p.id),null)+'<div class="done">'+h+
    '<p style="color:var(--muted);font-size:20px">'+esc(p.cliente.nome)+' · '+esc(p.industria)+'<br>'+p.caixas+' caixas · '+brl(p.total)+'<br>Sua comissão: <b style="color:var(--ok)">'+brl(p.comissao)+'</b></p>'+
    '<div style="margin-top:24px"><button class="btn" id="novoP">Fazer outro pedido</button></div><div style="margin-top:10px"><button class="btn alt" data-go="pedidos">Meus pedidos</button></div></div>';

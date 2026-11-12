@@ -2,7 +2,7 @@
 (function(){
 'use strict';
 var API='https://script.google.com/macros/s/AKfycbwXihSxdsQyjWX4aZ0ahFw9KHseiktYK9yHfJVUags-bjCFaTw1FrmeTPW4kmerBayt-A/exec';
-var VERSAO='2026-11-03a';
+var VERSAO='2026-11-12a';
 var K={cred:'db.cred',dados:'db.dados',fila:'db.fila',novos:'db.clientesNovos'};
 var $=function(s){return document.querySelector(s)};
 function ler(k,d){try{var v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}}
@@ -94,19 +94,40 @@ function telaClientes(a){
   lista();$('#busca').addEventListener('input',function(e){S.busca=e.target.value;lista()})}
 
 function telaNovo(a){
+  var campo=function(id,rot,extra){return '<label class="field" for="'+id+'">'+rot+'<input id="'+id+'" autocomplete="off"'+(extra||'')+'></label>'};
   a.innerHTML=topo('Cliente novo','clientes')+
-   '<label class="field" for="n1">Nome do cliente<input id="n1" autocomplete="off"></label>'+
-   '<label class="field" for="n2">Cidade<input id="n2" autocomplete="off"></label>'+
-   '<label class="field" for="n5">UF<input id="n5" autocomplete="off" maxlength="2" autocapitalize="characters" value="ES" style="width:120px"></label>'+
-   '<label class="field" for="n3">CNPJ (se tiver)<input id="n3" inputmode="numeric" autocomplete="off"></label>'+
-   '<label class="field" for="n4">Telefone<input id="n4" inputmode="tel" autocomplete="off"></label>'+
+   campo('n3','CNPJ',' inputmode="numeric"')+
+   '<div style="margin-top:10px"><button class="btn alt" id="buscaN">Buscar dados pelo CNPJ</button></div><div id="msgN"></div>'+
+   campo('n1','Razão social')+campo('n6','Nome fantasia (se tiver)')+
+   campo('n7','Endereço (rua, número, complemento)')+campo('n8','Bairro')+
+   campo('n9','CEP',' inputmode="numeric"')+campo('n2','Cidade')+
+   campo('n5','UF',' maxlength="2" autocapitalize="characters" value="ES" style="width:120px"')+
+   campo('n4','Telefone',' inputmode="tel"')+campo('n10','Inscrição estadual (ou ISENTO)')+
    '<div class="seg" id="segN"><button data-nv="VAREJO" class="on">Supermercado (varejo)</button><button data-nv="ATACADO">Atacadista</button></div>'+
-   '<div style="margin-top:20px"><button class="btn" id="salvaN" disabled>Salvar e continuar</button></div><p class="note">Só nome e cidade são obrigatórios. O tipo vale para a tabela da Bel Lar.</p>';
-  var nv='VAREJO';var ok=function(){$('#salvaN').disabled=!($('#n1').value.trim()&&$('#n2').value.trim())};
-  ['n1','n2'].forEach(function(i){$('#'+i).addEventListener('input',ok)});
+   '<div style="margin-top:20px"><button class="btn" id="salvaN" disabled>Salvar e continuar</button></div><p class="note" id="faltaN"></p>';
+  var nv='VAREJO';var v=function(i){return $('#'+i).value.trim()};
+  var obrig=[['n3','CNPJ'],['n1','razão social'],['n7','endereço'],['n8','bairro'],['n9','CEP'],['n2','cidade'],['n5','UF']];
+  var ok=function(){var f=obrig.filter(function(x){return x[0]==='n3'?v('n3').replace(/\D/g,'').length!==14:!v(x[0])}).map(function(x){return x[1]});
+    $('#salvaN').disabled=f.length>0;
+    $('#faltaN').textContent=f.length?'Falta: '+f.join(', ')+'.':(v('n10')?'Tudo certo.':'Tudo certo. Se souber, preencha a inscrição estadual.')};
+  ['n1','n2','n3','n5','n7','n8','n9','n10'].forEach(function(i){$('#'+i).addEventListener('input',ok)});ok();
+  $('#buscaN').onclick=function(){var d=v('n3').replace(/\D/g,''),m=$('#msgN');
+    if(d.length!==14){m.innerHTML='<div class="erro">Digite os 14 números do CNPJ.</div>';return}
+    if(!navigator.onLine){m.innerHTML='<div class="aviso">Sem sinal: preencha os campos à mão.</div>';return}
+    m.innerHTML='<p class="note"><span class="spin"></span> Buscando na Receita…</p>';
+    fetch('https://brasilapi.com.br/api/cnpj/v1/'+d).then(function(r){if(!r.ok)throw new Error(r.status===404?'CNPJ não encontrado na Receita.':'Não deu para buscar agora.');return r.json()}).then(function(j){
+      var set=function(id,x){if(x&&String(x).trim())$('#'+id).value=String(x).trim()};
+      set('n1',j.razao_social);set('n6',j.nome_fantasia);
+      set('n7',[[j.descricao_tipo_de_logradouro,j.logradouro].filter(function(x){return x&&String(x).trim()}).join(' '),j.numero,j.complemento].filter(function(x){return x&&String(x).trim()}).join(', '));
+      set('n8',j.bairro);set('n9',String(j.cep||'').replace(/\D/g,'').replace(/^(\d{5})(\d{3})$/,'$1-$2'));set('n2',j.municipio);set('n5',j.uf);
+      if(j.ddd_telefone_1)set('n4',String(j.ddd_telefone_1).replace(/\D/g,'').replace(/^(\d{2})(\d{4,5})(\d{4})$/,'($1) $2-$3'));
+      m.innerHTML='<div class="aviso" style="background:var(--ok-bg);color:var(--ok)">Dados da Receita preenchidos. Confira e complete a inscrição estadual.</div>';ok()
+    }).catch(function(e){m.innerHTML='<div class="erro">'+esc(e.message)+' Preencha à mão.</div>'})};
   $('#segN').addEventListener('click',function(e){var b=e.target.closest('[data-nv]');if(!b)return;nv=b.dataset.nv;document.querySelectorAll('#segN button').forEach(function(x){x.classList.toggle('on',x.dataset.nv===nv)})});
-  $('#salvaN').onclick=function(){var cnpj=$('#n3').value.replace(/\D/g,'');if(cnpj.length===14)cnpj=cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/,'$1.$2.$3/$4-$5');
-    var c={cnpj:cnpj||('NOVO-'+novoNum()),nome:$('#n1').value.trim(),fantasia:'',cidade:$('#n2').value.trim(),uf:$('#n5').value.trim().toUpperCase(),telefone:$('#n4').value.trim(),nivel:nv,limeira:false,bel:false,sanilar:false,local:true};
+  $('#salvaN').onclick=function(){var cnpj=v('n3').replace(/\D/g,'').replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/,'$1.$2.$3/$4-$5');
+    var ja=clientes().filter(function(x){return x.cnpj===cnpj})[0];
+    if(ja){S.cli=ja;S.qty={};S.obs='';ir('industria');return}
+    var c={cnpj:cnpj,nome:v('n1'),fantasia:v('n6'),cidade:v('n2'),uf:v('n5').toUpperCase(),telefone:v('n4'),endereco:v('n7'),bairro:v('n8'),cep:v('n9'),ie:v('n10'),nivel:nv,limeira:false,bel:false,sanilar:false,local:true};
     S.novos.unshift(c);grava(K.novos,S.novos);S.cli=c;S.qty={};S.obs='';ir('industria')}}
 
 function telaIndustria(a){var c=S.cli;
@@ -156,7 +177,7 @@ function telaConferir(a){var t=totais(),c=S.cli,ind=industria(S.ind),nv=temNivei
 
 function enviar(itens,t){var c=S.cli;var num=novoNum();
   var ped={id:num,data:agora(),industria:S.ind,nivel:temNiveis(S.ind)?S.nivel:'ÚNICO',obs:S.obs,
-    cliente:{cnpj:c.cnpj,nome:c.nome,fantasia:c.fantasia||'',cidade:c.cidade,uf:c.uf||'',telefone:c.telefone||''},
+    cliente:{cnpj:c.cnpj,nome:c.nome,fantasia:c.fantasia||'',cidade:c.cidade,uf:c.uf||'',telefone:c.telefone||'',endereco:c.endereco||'',bairro:c.bairro||'',cep:c.cep||'',ie:c.ie||''},
     itens:itens.map(function(p){return {chave:p.chave,cod:p.cod,desc:p.desc,qtd:S.qty[p.chave],preco:p.preco}}),
     total:t.t,comissao:t.com,caixas:t.cx};
   S.fila.unshift({pedido:ped,status:'pendente',criadoEm:agora(),tentativas:0});grava(K.fila,S.fila);
